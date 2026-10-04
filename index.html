@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>My Cooking Assistant</title>
+  <meta name="description" content="Private recipe assistant.">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#c84a1e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cooking">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script>
+    // apply saved theme before paint
+    (function(){ try { var t = localStorage.getItem('mca.theme') || 'auto'; document.documentElement.dataset.theme = t; } catch(e){} })();
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="backBtn" aria-label="Back" hidden>‹</button>
+    <h1 id="pageTitle"><a href="#/">My Cooking Assistant</a></h1>
+    <button class="icon-btn" id="themeBtn" aria-label="Toggle dark or light mode" title="Theme">◐</button>
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings">⚙️</button>
+  </header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <nav class="tabbar" aria-label="Main">
+    <a href="#/" data-tab="home"><span class="ti">🍳</span><span>Recipes</span></a>
+    <a href="#/favorites" data-tab="favorites"><span class="ti">★</span><span>Favorites</span></a>
+    <a href="#/tools" data-tab="tools"><span class="ti">🌡️</span><span>Temps &amp; Tools</span></a>
+  </nav>
+
+  <div id="lock" class="lock" hidden role="dialog" aria-modal="true" aria-labelledby="lockTitle">
+    <form id="lockForm" class="lock-card" autocomplete="on">
+      <img src="icons/icon-192.png" alt="" width="96" height="96">
+      <h1 id="lockTitle">My Cooking Assistant</h1>
+      <p class="note-sm">This app is private. Enter the passphrase to unlock.</p>
+      <input type="text" name="username" value="cooking" autocomplete="username" hidden>
+      <input id="lockPass" type="password" autocomplete="current-password" placeholder="Passphrase" aria-label="Passphrase" required>
+      <label class="check"><input id="lockRemember" type="checkbox" checked> Remember on this device</label>
+      <button class="btn primary" id="lockBtn" type="submit">Unlock</button>
+      <p id="lockErr" class="lock-err" role="alert"></p>
+    </form>
+  </div>
+  <div id="cook" class="cook" hidden role="dialog" aria-modal="true" aria-label="Cook mode"></div>
+  <div id="sheet" class="sheet" hidden role="dialog" aria-modal="true"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <noscript>This app needs JavaScript.</noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

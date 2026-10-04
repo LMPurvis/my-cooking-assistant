@@ -1,0 +1,10 @@
+# Publish ONLY the app shell + encrypted vault. Never commit plaintext data.
+data/*
+!data/vault.json
+*.xlsx
+*.docx
+*.md
+sources.json
+parse_report*
+screenshots/
+.DS_Store
