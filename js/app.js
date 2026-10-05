@@ -47,16 +47,28 @@ function showLock(vault) {
     const form = $('#lockForm'), pass = $('#lockPass'), err = $('#lockErr'), btn = $('#lockBtn');
     err.textContent = hasCrypto ? '' : 'This browser can’t decrypt (WebCrypto needs HTTPS).';
     setTimeout(() => pass.focus(), 50);
+    const tog = $('#lockToggle');
+    if (tog) tog.onclick = () => {
+      const show = pass.type === 'password';
+      pass.type = show ? 'text' : 'password';
+      tog.textContent = show ? 'Hide' : 'Show';
+      tog.setAttribute('aria-pressed', show ? 'true' : 'false');
+      tog.setAttribute('aria-label', show ? 'Hide passphrase' : 'Show passphrase');
+      pass.focus();
+    };
     form.onsubmit = async (e) => {
       e.preventDefault();
-      if (!pass.value) { err.textContent = 'Please enter the passphrase.'; return; }
+      const phrase = pass.value.trim();
+      if (!phrase) { err.textContent = 'Please enter the passphrase.'; return; }
       btn.disabled = true; btn.textContent = 'Unlocking…'; err.textContent = '';
       try {
-        const payload = await unlockWithPassphrase(vault, pass.value, $('#lockRemember').checked);
+        const payload = await unlockWithPassphrase(vault, phrase, $('#lockRemember').checked);
         pass.value = ''; lock.hidden = true; document.body.classList.remove('locked');
         resolve(payload);
       } catch (ex) {
-        err.textContent = ex.message === 'bad-passphrase' ? 'That passphrase didn’t work. Check it and try again.' : 'Couldn’t unlock: ' + ex.message;
+        err.textContent = ex.message === 'bad-passphrase'
+          ? 'That passphrase didn’t work. It’s case-sensitive — check for auto-capitalized letters and try again.'
+          : 'Couldn’t unlock: ' + ex.message;
         pass.select();
       } finally { btn.disabled = false; btn.textContent = 'Unlock'; }
     };

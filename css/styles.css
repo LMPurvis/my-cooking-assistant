@@ -171,10 +171,15 @@ textarea.note { width: 100%; min-height: 180px; font-size: 20px; padding: 14px; 
 .lock-card { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 14px; text-align: center; }
 .lock-card img { align-self: center; border-radius: 22px; box-shadow: var(--shadow); }
 .lock-card h1 { margin: 0; font-size: 28px; }
-.lock-card input[type=password] { height: 64px; font-size: 22px; padding: 0 18px; border-radius: var(--radius); border: 2px solid var(--border); background: var(--surface); text-align: center; }
-.lock-card input[type=password]:focus { outline: none; border-color: var(--accent); }
+.lock-card .pass-wrap input { height: 64px; font-size: 22px; padding: 0 18px; border-radius: var(--radius); border: 2px solid var(--border); background: var(--surface); text-align: center; }
+.lock-card .pass-wrap input:focus { outline: none; border-color: var(--accent); }
 .lock-card .check { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; font-weight: 600; }
 .lock-card .check input { width: 26px; height: 26px; accent-color: var(--accent); }
 .lock-err { min-height: 24px; margin: 0; color: var(--tbd); font-weight: 700; }
 body.locked .topbar, body.locked .tabbar, body.locked main { visibility: hidden; }
 .settings-list { display: grid; gap: 10px; }
+
+.pass-wrap { position: relative; display: flex; align-items: stretch; }
+.pass-wrap input { flex: 1; padding-right: 84px !important; }
+.pass-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); min-height: 48px; min-width: 68px; border: 0; border-radius: 12px; background: var(--surface2); font-weight: 700; font-size: 15px; color: var(--muted); cursor: pointer; }
+.pass-toggle[aria-pressed="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--surface2)); }

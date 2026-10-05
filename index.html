@@ -42,7 +42,10 @@
       <h1 id="lockTitle">My Cooking Assistant</h1>
       <p class="note-sm">This app is private. Enter the passphrase to unlock.</p>
       <input type="text" name="username" value="cooking" autocomplete="username" hidden>
-      <input id="lockPass" type="password" autocomplete="current-password" placeholder="Passphrase" aria-label="Passphrase" required>
+      <div class="pass-wrap">
+        <input id="lockPass" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Passphrase" aria-label="Passphrase" required>
+        <button type="button" class="pass-toggle" id="lockToggle" aria-label="Show passphrase" aria-pressed="false">Show</button>
+      </div>
       <label class="check"><input id="lockRemember" type="checkbox" checked> Remember on this device</label>
       <button class="btn primary" id="lockBtn" type="submit">Unlock</button>
       <p id="lockErr" class="lock-err" role="alert"></p>
