@@ -36,6 +36,53 @@ export function fmtGrams(g) {
   return fmtNum(g, 1) + ' g';
 }
 
+/** Format grams as a readable lb/oz line for meat and other weight-measured ingredients.
+ *  Examples: 454 → "1 lb", 227 → "8 oz", 680 → "1 lb 8 oz", 100 → "3.5 oz" */
+export function fmtLbOz(g) {
+  if (g == null || !isFinite(g) || g <= 0) return '';
+  const totalOz = g / OZ;
+  if (totalOz < 0.05) return fmtGrams(g); // tiny amounts stay as grams
+  // Prefer whole/half ounces under 1 lb
+  if (totalOz < 16 - 1e-6) {
+    const oz = totalOz >= 10 ? round(totalOz, 0) : (totalOz >= 1 ? round(totalOz, 1) : round(totalOz, 2));
+    return fmtNum(oz, oz >= 10 ? 0 : (oz >= 1 ? 1 : 2)) + ' oz';
+  }
+  const lbs = totalOz / 16;
+  // Exact or near-exact pounds
+  const whole = Math.floor(lbs + 1e-9);
+  const remOz = totalOz - whole * 16;
+  if (remOz < 0.25) return fmtNum(whole, 0) + (whole === 1 ? ' lb' : ' lb');
+  if (Math.abs(remOz - 16) < 0.25) return fmtNum(whole + 1, 0) + ' lb';
+  // Half-pound friendly
+  if (Math.abs(remOz - 8) < 0.35) return whole + ' lb 8 oz';
+  // Otherwise "X lb Y oz" with Y rounded to whole oz, or decimal lb if cleaner
+  const y = round(remOz, 0);
+  if (y === 0) return whole + (whole === 1 ? ' lb' : ' lb');
+  if (y === 16) return (whole + 1) + ' lb';
+  return whole + ' lb ' + y + ' oz';
+}
+
+/** Kitchen volume units — these keep the volume line and do NOT get an lb/oz secondary. */
+export function isKitchenVolume(vol) {
+  if (!vol) return false;
+  return /\b(cups?|tbsp|tsp|teaspoons?|tablespoons?|ml|mL|fl\.?\s*oz|cloves?|eggs?|whites?|onion|medium|large|small|pats?|pinch)\b/i.test(vol)
+    || /\d\s*\/\s*\d\s*cup/i.test(vol);
+}
+
+/** True when we should show an lb/oz line under grams (meat, belly, canned oz, sausage batches, etc.). */
+export function isMassIngredient(ing) {
+  if (isKitchenVolume(ing.volume)) return false;
+  const wt = ing.weightText || '';
+  const vol = ing.volume || '';
+  const src = ing.gramsSource || '';
+  if (/\b(oz|lbs?|kg)\b/i.test(wt)) return true;
+  if (/^(oz|lb|g|kg)/.test(src)) return true;
+  if (ing.grams != null && !vol) return true;
+  if (/\b(oz|lbs?|kg)\b/i.test(vol)) return true;
+  return false;
+}
+
+
 const UNI = { '¼': .25, '½': .5, '¾': .75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': .125, '⅜': .375, '⅝': .625, '⅞': .875 };
 const QTY = String.raw`(\d+\s+\d+\/\d+|\d+\/\d+|\d*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+(?:\.\d+)?)`;
 
@@ -115,11 +162,16 @@ export function scaleText(text, factor) {
 
 /** scale one ingredient; returns display data */
 export function scaleIngredient(ing, factor) {
-  const out = { grams: null, gramsMax: null, gramsText: '', volumeText: '', weightText: '' };
+  const out = { grams: null, gramsMax: null, gramsText: '', massText: '', volumeText: '', weightText: '' };
   if (ing.grams != null) {
     out.grams = ing.grams * factor;
     out.gramsMax = ing.gramsMax != null ? ing.gramsMax * factor : null;
     out.gramsText = out.gramsMax != null ? `${fmtNum(out.grams, out.grams < 100 ? 1 : 0)}–${fmtGrams(out.gramsMax)}` : fmtGrams(out.grams);
+    if (isMassIngredient(ing)) {
+      out.massText = out.gramsMax != null
+        ? `${fmtLbOz(out.grams)}–${fmtLbOz(out.gramsMax)}`
+        : fmtLbOz(out.grams);
+    }
   } else if (ing.weightText) {
     out.weightText = scaleText(ing.weightText, factor).text;
   }

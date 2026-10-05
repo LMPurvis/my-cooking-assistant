@@ -1,4 +1,4 @@
-import { LB, G, factorFor, baseValue, scaleIngredient, fmtNum, fmtGrams, fToC, cToF, convertAll, UNITS, cureGrams, toGrams, round } from './scale.js';
+import { LB, G, factorFor, baseValue, scaleIngredient, fmtNum, fmtGrams, fmtLbOz, isMassIngredient, isKitchenVolume, fToC, cToF, convertAll, UNITS, cureGrams, toGrams, round } from './scale.js';
 import { fetchVault, unlockWithStoredKey, unlockWithPassphrase, forgetKey, hasCrypto } from './vault.js';
 import { canRecognize, canSpeak, isIOS, speak, stopSpeaking, createCommandListener, createDictation, canWakeLock, requestWakeLock, releaseWakeLock, wakeLockWanted } from './speech.js';
 
@@ -195,10 +195,21 @@ function factors(r, sc) {
 function ingRowHTML(ing, f, sc, r, big = false) {
   const s = scaleIngredient(ing, f);
   let g = s.gramsText || (s.weightText ? esc(s.weightText) : '');
-  if (ing.isBasis && r.scaling.type === 'weight') g = fmtGrams(toGrams(sc.value, sc.unit)) + ' <small>(your weight)</small>';
+  if (ing.isBasis && r.scaling.type === 'weight') {
+    const bg = toGrams(sc.value, sc.unit);
+    g = fmtGrams(bg) + ' <small>(your weight)</small>';
+    s.massText = fmtLbOz(bg);
+  }
   const flags = `${ing.est ? ' <span class="badge est">est.</span>' : ''}${ing.tbd ? ' <span class="badge tbd">TBD</span>' : ''}${ing.toTaste ? ' <span class="tag">to taste</span>' : ''}`;
   const sub = [];
-  if (s.volumeText) sub.push(`<span>${flagify(s.volumeText)}${Math.abs(f - 1) > 1e-6 && s.volumeText !== ing.volume ? ' <span class="scaled-flag">scaled</span>' : ''}</span>`);
+  // Secondary line: kitchen volume (tbsp/cup/…) OR lb/oz for meat & other weight items (never cups for those).
+  const scaledFlag = (orig, cur) => Math.abs(f - 1) > 1e-6 && cur !== orig ? ' <span class="scaled-flag">scaled</span>' : '';
+  if (s.volumeText && isKitchenVolume(ing.volume)) {
+    sub.push(`<span>${flagify(s.volumeText)}${scaledFlag(ing.volume, s.volumeText)}</span>`);
+  } else {
+    if (s.massText) sub.push(`<span>${esc(s.massText)}${Math.abs(f - 1) > 1e-6 ? ' <span class="scaled-flag">scaled</span>' : ''}</span>`);
+    if (s.volumeText) sub.push(`<span>${flagify(s.volumeText)}${scaledFlag(ing.volume, s.volumeText)}</span>`);
+  }
   if (ing.pct) { const lb = ing.pct.label.replace(/\s*\(.*\)/, ''); sub.push(`<span>${lb.startsWith('%') ? flagify(ing.pct.value) + ' ' + esc(lb.slice(1).trim()) : esc(lb.replace(/\s*%$/, '')) + ' ' + flagify(ing.pct.value)}</span>`); }
   if (ing.notes) sub.push(`<span>${flagify(ing.notes)}</span>`);
   return `<li class="${ing.isTotal ? 'total' : ''} ${ing.isBasis ? 'basis' : ''}">

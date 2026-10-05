@@ -1,5 +1,5 @@
 // My Cooking Assistant service worker: app shell cache-first, data stale-while-revalidate.
-const VERSION = 'mca-v1.1.1';
+const VERSION = 'mca-v1.1.2';
 const SHELL = ['./', 'index.html', 'css/styles.css', 'js/app.js', 'js/scale.js', 'js/speech.js', 'js/vault.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'data/vault.json'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
