@@ -151,7 +151,7 @@ export function scaleText(text, factor) {
     return { text: fmtTsp(tsp * factor) + (tail ? ' ' + tail : ''), scaled: true };
   }
   // generic leading quantity or range ("2-3 whites", "1 can", "6 medium")
-  const gen = t.match(new RegExp('^' + QTY + String.raw`(?:\s*[-–]\s*` + QTY + ')?'));
+  const gen = t.match(new RegExp('^' + QTY + String.raw`(?:\s*(?:[-–]|to\b)\s*` + QTY + ')?'));
   if (gen) {
     const a = parseQty(gen[1]) * factor, b = gen[2] ? parseQty(gen[2]) * factor : null;
     const f = (x) => (x >= 10 ? fmtNum(x, 0) : fmtFrac(x));

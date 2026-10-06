@@ -249,7 +249,10 @@ function scalerHTML(r, sc) {
 function renderRecipe(r, params) {
   setTab(''); setTitle(r.name, true);
   const sc = getScale(r, params);
-  const credit = [['Source', r.source], ['Adapted from', r.adaptedFrom], ['Origin', r.origin], ['Date added', r.dateAdded]].filter((x) => x[1]);
+  const link = (u, t) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`;
+  const vids = r.videos || [];
+  const credit = [['Source', r.source && r.sourceUrl ? link(r.sourceUrl, r.source) : r.source && md(r.source)], ...vids.map((v) => ['Video', link(v.url, '▶ ' + v.label)]),
+    ['Adapted from', r.adaptedFrom && md(r.adaptedFrom)], ['Origin', r.origin && esc(r.origin)], ['Date added', r.dateAdded && esc(r.dateAdded)]].filter((x) => x[1]);
   const groupedSteps = (steps) => { let html = '', cur; for (const s of steps) { if (s.group !== cur) { if (cur !== undefined) html += '</ol>'; cur = s.group; html += `${s.group ? `<h4>${esc(s.group)}</h4>` : ''}<ol class="steps">`; } html += `<li>${flagify(s.text)}</li>`; } return html + (steps.length ? '</ol>' : ''); };
   const listMd = (arr) => arr.length ? `<div class="md"><ul>${arr.map((t) => `<li>${md(t)}</li>`).join('')}</ul></div>` : '<p class="note-sm">None recorded yet.</p>';
   view.innerHTML = `
@@ -266,6 +269,7 @@ function renderRecipe(r, params) {
         <a class="btn" href="${esc(r.docUrl)}" target="_blank" rel="noopener">📄 Open doc</a>
         <button class="btn" id="voiceNoteBtn">🎤 Voice note</button>
         ${r.calculator ? `<a class="btn small" href="${esc(r.calculator.url)}" target="_blank" rel="noopener">🧮 Sheet calculator</a>` : ''}
+        ${vids.map((v, i) => `<a class="btn small video-link" href="${esc(v.url)}" target="_blank" rel="noopener" title="${esc(v.label)}">▶ ${vids.length > 1 ? `Video ${i + 1}` : 'Watch video'}</a>`).join('')}
         ${r.photosUrl ? `<a class="btn small" href="${esc(r.photosUrl)}" target="_blank" rel="noopener">📷 Photos</a>` : ''}
       </div>
       ${scalerHTML(r, sc)}
@@ -279,7 +283,7 @@ function renderRecipe(r, params) {
         ${r.indexNotes ? `<p class="note-sm"><b>Index note:</b> ${flagify(r.indexNotes)}</p>` : ''}</section>
       ${Object.entries(r.extraSections).map(([k, v]) => `<section class="panel"><h3>${esc(k)}</h3>${listMd(v)}</section>`).join('')}
       <section class="panel"><h3>My Notes</h3>${r.myNotes.length ? listMd(r.myNotes) : '<p class="note-sm">No dated notes yet. Use 🎤 Voice note to dictate one.</p>'}</section>
-      <section class="panel"><h3>Source credit</h3><dl class="credit">${credit.map(([k, v]) => `<dt>${k}</dt><dd>${md(v)}</dd>`).join('')}</dl></section>
+      <section class="panel"><h3>Source credit</h3><dl class="credit">${credit.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></section>
     </article>`;
 
   const update = () => {
@@ -488,7 +492,8 @@ function renderTools() {
     <section class="panel"><h3>My equipment</h3><div class="tags">${(PRIVATE.equipment || []).map((t) => `<span class="tag" style="font-size:15px">${t}</span>`).join('')}</div>
       ${Object.entries(REF.notes).filter(([k]) => k !== 'Chicken Grilling Times').map(([k, v]) => `<h4>${esc(k)}</h4><div class="md note-sm"><ul>${v.map((t) => `<li>${md(t)}</li>`).join('')}</ul></div>`).join('')}
       <p class="note-sm">From <a href="${esc(REF.source.url)}" target="_blank" rel="noopener">${esc(REF.source.name)}</a>.</p></section>
-    </div></div>`;
+    </div></div>
+    ${sheetRefsHTML()}`;
 
   const tf = $('#tf'), tc = $('#tc');
   tf.oninput = () => { const v = parseFloat(tf.value); if (isFinite(v)) tc.value = round(fToC(v), 1); };
@@ -523,8 +528,100 @@ function renderTools() {
     drawCure();
   });
   drawCure();
+  wireSheetRefs();
   window.scrollTo(0, 0);
 }
+
+// ---------------------------------------------------------------- sheet reference tabs (from the vault)
+const SR = () => REF.sheet || {};
+const col = (t, name) => t.headers.findIndex((h) => h.toLowerCase().startsWith(name.toLowerCase()));
+const heatClass = (h) => `heat h${Math.min(5, Math.max(1, Math.ceil((+h || 1) / 2)))}`;
+const tierClass = (t) => `tier ${({ 'very high': 'vh', high: 'hi', medium: 'md', low: 'lo' })[String(t).toLowerCase()] || 'na'}`;
+const detailRows = (t, row, skip) => `<dl class="ref-dl">${t.headers.map((h, i) => skip.includes(i) || !row[i] ? '' : `<dt>${esc(h)}</dt><dd>${esc(row[i])}</dd>`).join('')}</dl>`;
+const refNotes = (t) => t.notes.length ? `<div class="note-sm ref-notes">${t.notes.map((n) => `<p>${esc(n)}</p>`).join('')}</div>` : '';
+
+function chileItems(order) {
+  const t = SR().chiles, H = col(t, 'Heat'), F = col(t, 'Fresh'), D = col(t, 'Dried'), lo = col(t, 'SHU low'), hi = col(t, 'SHU high');
+  const rows = t.rows.map((r, i) => ({ r, i }));
+  if (order === 'hot') rows.sort((a, b) => (+b.r[H] - +a.r[H]) || (+b.r[hi] - +a.r[hi]));
+  else if (order === 'mild') rows.sort((a, b) => (+a.r[H] - +b.r[H]) || (+a.r[lo] - +b.r[lo]));
+  return rows.map(({ r }) => `<details class="ref-item"><summary><span class="${heatClass(r[H])}" title="Heat ${esc(r[H])} of 10">${esc(r[H])}</span><span class="ref-name">${esc(r[F])}<small>→ ${esc(r[D])}</small></span><span class="ref-side">${(+r[lo]).toLocaleString()}–${(+r[hi]).toLocaleString()} SHU</span></summary>${detailRows(t, r, [F, D, H])}</details>`).join('');
+}
+function sheetRefsHTML() {
+  const s = SR(); let html = '';
+  if (s.sausage) html += `<details class="panel ref-panel" id="refSausage" open><summary><h3>${esc(s.sausage.title)}</h3></summary>${sausageHTML()}</details>`;
+  if (s.chiles) html += `<details class="panel ref-panel" id="refChiles"><summary><h3>Chiles Reference <small>${s.chiles.rows.length}</small></h3></summary>
+    <div class="heat-legend">${[1, 3, 5, 7, 9].map((h) => `<span class="${heatClass(h)}">${h}–${h + 1}</span>`).join('')}<span class="note-sm">heat 1–10</span></div>
+    <div class="seg" role="group" aria-label="Sort chiles" style="margin:8px 0">${[['sheet', 'Sheet order'], ['mild', 'Mild → hot'], ['hot', 'Hot → mild']].map(([k, l]) => `<button data-csort="${k}" aria-pressed="${k === 'sheet'}" style="padding:0 12px">${l}</button>`).join('')}</div>
+    <div id="chileList">${chileItems('sheet')}</div>${refNotes(s.chiles)}</details>`;
+  if (s.spices) { const t = s.spices, N = col(t, 'Name'), T = col(t, 'Type'), W = col(t, 'Approx. g');
+    html += `<details class="panel ref-panel" id="refSpices"><summary><h3>Spices &amp; Herbs Reference <small>${t.rows.length}</small></h3></summary>
+    <input class="ref-filter" id="spiceFilter" type="search" placeholder="Filter spices & herbs…" aria-label="Filter spices and herbs" autocomplete="off">
+    <div id="spiceList">${t.rows.map((r) => `<details class="ref-item" data-q="${esc(r.join(' ').toLowerCase())}"><summary><span class="ref-name">${esc(r[N])}<small>${esc(r[T])}</small></span><span class="ref-side">${esc(r[W])}</span></summary>${detailRows(t, r, [N, T])}</details>`).join('')}</div>${refNotes(t)}</details>`; }
+  if (s.fats) { const t = s.fats, N = col(t, 'Name'), T = col(t, 'Smoke tier'), F = col(t, 'Smoke point °F'), Y = col(t, 'Type');
+    html += `<details class="panel ref-panel" id="refFats"><summary><h3>Fats &amp; Oils Reference <small>${t.rows.length}</small></h3></summary>
+    <div class="heat-legend">${['Low', 'Medium', 'High', 'Very high'].map((x) => `<span class="${tierClass(x)}">${x}</span>`).join('')}<span class="note-sm">smoke tier</span></div>
+    <div>${t.rows.map((r) => `<details class="ref-item"><summary><span class="${tierClass(r[T])}">${esc(r[T])}</span><span class="ref-name">${esc(r[N])}<small>${esc(r[Y])}</small></span><span class="ref-side">${esc(r[F])}${/^\d|~/.test(r[F]) ? '°F' : ''}</span></summary>${detailRows(t, r, [N, T, Y])}</details>`).join('')}</div>${refNotes(t)}</details>`; }
+  return html;
+}
+
+const TIER_OPTS = ['Primary', 'Secondary', 'Third', 'Custom'];
+function sausageState() {
+  const d = SR().sausage.defaults;
+  const st = store.get('sausageCalc', null);
+  return st && st.v === 1 ? st : { v: 1, amt: d.grams, unit: 'g', salt: d.saltPct, cure: d.cure, binderType: d.binderType, binder: d.binderPct, liquid: d.liquidPct, fat: d.fatPct,
+    spices: SR().sausage.spices.map((x) => ({ n: x.name, t: x.tier, o: '' })) };
+}
+function sausageHTML() {
+  const S = SR().sausage, st = sausageState(), h = S.hints, num = (id, label, v, hint) => `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="number" inputmode="decimal" step="any" value="${v}">${hint ? `<small class="hint">${esc(hint)}</small>` : ''}</div>`;
+  return `<p class="note-sm" style="margin-top:0">Enter total meat + fat. Everything is a % of that weight. Tiers: Primary ${S.tiers.Primary}% · Secondary ${S.tiers.Secondary}% · Third ${S.tiers.Third}%.</p>
+    <div class="conv">${num('sgAmt', 'Meat + fat', st.amt, '')}
+      <div class="field"><label>Unit</label><div class="seg" role="group" aria-label="Sausage unit" style="width:100%">${['g', 'lb'].map((u) => `<button style="flex:1" data-su="${u}" aria-pressed="${st.unit === u}">${u}</button>`).join('')}</div></div></div>
+    <div class="conv">${num('sgSalt', 'Salt %', st.salt, h['Salt %'])}${num('sgFat', 'Fat target %', st.fat, h['Fat target %'])}</div>
+    <div class="conv">${num('sgBinder', 'Binder %', st.binder, h['Binder %'])}<div class="field"><label for="sgBinderType">Binder type</label><input id="sgBinderType" value="${esc(st.binderType)}"></div></div>
+    <div class="conv">${num('sgLiquid', 'Liquid %', st.liquid, h['Liquid %'])}<div class="field"><label for="sgCure">Cure #1 (${S.defaults.curePct}%)</label><label class="toggle"><input id="sgCure" type="checkbox" ${st.cure ? 'checked' : ''}> <span>Add pink salt</span></label><small class="hint">${esc(h['Cure #1 (Yes/No)'] || '')}</small></div></div>
+    <table class="tbl sg-out"><thead><tr><th>Ingredient</th><th>%</th><th class="num">Grams</th><th class="num">oz</th></tr></thead><tbody id="sgRows"></tbody></table>
+    <h4>Spices</h4><div id="sgSpices"></div><div class="quick"><button id="sgAddSpice">+ Add spice</button><button id="sgReset">Reset to sheet defaults</button></div>
+    <div class="note-sm ref-notes">${S.notes.filter(Boolean).map((n) => `<p>${md(n)}</p>`).join('')}</div>`;
+}
+function wireSausage() {
+  const S = SR().sausage; if (!S || !$('#sgAmt')) return;
+  let st = sausageState();
+  const tierPct = (x) => x.t === 'Custom' ? (parseFloat(x.o) || 0) : (S.tiers[x.t] || 0);
+  const g1 = (n) => fmtNum(round(n, 1), 1);
+  const draw = () => {
+    const tot = toGrams(parseFloat(st.amt) || 0, st.unit);
+    const pct = (p) => round(tot * p / 100, 1);
+    const fat = round(tot * st.fat / 100, 1), lean = round(tot * (1 - st.fat / 100), 1);
+    const rows = [['lean', 'Lean meat', 100 - st.fat, lean], ['fat', 'Fat', st.fat, fat], ['salt', 'Salt', st.salt, pct(st.salt)],
+      ['cure', 'Cure #1 (pink salt)', st.cure ? S.defaults.curePct : 0, st.cure ? pct(S.defaults.curePct) : 0],
+      ['binder', `Binder${st.binderType ? ' — ' + st.binderType : ''}`, st.binder, pct(st.binder)], ['liquid', 'Liquid (water)', st.liquid, pct(st.liquid)]];
+    $('#sgRows').innerHTML = rows.map(([k, l, p, g]) => `<tr data-k="${k}"${k === 'cure' && !st.cure ? ' class="off"' : ''}><td>${esc(l)}</td><td>${fmtNum(p, 2)}%</td><td class="num"><b class="g">${g1(g)}</b> g${g >= 454 ? `<small>${esc(fmtLbOz(g))}</small>` : ''}</td><td class="num">${fmtNum(g / OZ_, 2)}</td></tr>`).join('')
+      + `<tr class="sub"><td>Total meat+fat</td><td></td><td class="num"><b>${g1(tot)}</b> g<small>${esc(fmtLbOz(tot))}</small></td><td class="num">${fmtNum(tot / OZ_, 1)}</td></tr>`;
+    $$('#sgSpices .sg-sp').forEach((el, i) => { const x = st.spices[i]; el.querySelector('.out').innerHTML = `<b>${g1(pct(tierPct(x)))}</b> g · ${fmtNum(tierPct(x), 2)}%`; });
+    store.set('sausageCalc', st);
+  };
+  const drawSpices = () => {
+    $('#sgSpices').innerHTML = st.spices.map((x, i) => `<div class="sg-sp"><input aria-label="Spice" data-i="${i}" data-k="n" value="${esc(x.n)}"><select aria-label="Tier" data-i="${i}" data-k="t">${TIER_OPTS.map((o) => `<option ${o === x.t ? 'selected' : ''}>${o}</option>`).join('')}</select><input aria-label="Custom %" data-i="${i}" data-k="o" type="number" inputmode="decimal" step="any" placeholder="%" value="${esc(x.o)}" ${x.t === 'Custom' ? '' : 'hidden'}><span class="out"></span><button data-sdel="${i}" aria-label="Remove spice">×</button></div>`).join('');
+    $$('#sgSpices [data-k]').forEach((el) => el[el.tagName === 'SELECT' ? 'onchange' : 'oninput'] = () => { st.spices[el.dataset.i][el.dataset.k] = el.value; if (el.dataset.k === 't') drawSpices(); else draw(); });
+    $$('[data-sdel]').forEach((b) => b.onclick = () => { st.spices.splice(+b.dataset.sdel, 1); drawSpices(); });
+    draw();
+  };
+  const bind = (id, k, f = (v) => parseFloat(v) || 0) => { $(id).oninput = () => { st[k] = f($(id).value); draw(); }; };
+  bind('#sgAmt', 'amt'); bind('#sgSalt', 'salt'); bind('#sgFat', 'fat'); bind('#sgBinder', 'binder'); bind('#sgLiquid', 'liquid'); bind('#sgBinderType', 'binderType', (v) => v);
+  $('#sgCure').onchange = () => { st.cure = $('#sgCure').checked; draw(); };
+  $$('[data-su]').forEach((b) => b.onclick = () => { const g = toGrams(parseFloat(st.amt) || 0, st.unit); st.unit = b.dataset.su; st.amt = round(g / G[st.unit], st.unit === 'g' ? 0 : 3); $('#sgAmt').value = st.amt; $$('[data-su]').forEach((x) => x.setAttribute('aria-pressed', x === b)); draw(); });
+  $('#sgAddSpice').onclick = () => { st.spices.push({ n: 'Spice', t: 'Secondary', o: '' }); drawSpices(); };
+  $('#sgReset').onclick = () => { store.set('sausageCalc', null); $('#refSausage').innerHTML = `<summary><h3>${esc(S.title)}</h3></summary>${sausageHTML()}`; wireSausage(); };
+  drawSpices();
+}
+function wireSheetRefs() {
+  wireSausage();
+  $$('[data-csort]').forEach((b) => b.onclick = () => { $('#chileList').innerHTML = chileItems(b.dataset.csort); $$('[data-csort]').forEach((x) => x.setAttribute('aria-pressed', x === b)); });
+  const f = $('#spiceFilter'); if (f) f.oninput = () => { const q = f.value.trim().toLowerCase(); $$('#spiceList .ref-item').forEach((el) => { el.hidden = !!q && !el.dataset.q.includes(q); }); };
+}
+const OZ_ = 28.349523125;
+
 
 // ---------------------------------------------------------------- boot
 (async function boot() {
