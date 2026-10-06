@@ -1,6 +1,6 @@
 import { LB, G, factorFor, baseValue, scaleIngredient, fmtNum, fmtGrams, fmtLbOz, isMassIngredient, isKitchenVolume, fToC, cToF, convertAll, UNITS, cureGrams, toGrams, round } from './scale.js';
 import { fetchVault, unlockWithStoredKey, unlockWithPassphrase, forgetKey, hasCrypto } from './vault.js';
-import { canRecognize, canSpeak, isIOS, speak, stopSpeaking, createCommandListener, createDictation, canWakeLock, requestWakeLock, releaseWakeLock, wakeLockWanted } from './speech.js';
+import { canRecognize, recognitionBlocked, micErrorText, canSpeak, isIOS, speak, stopSpeaking, createCommandListener, createDictation, canWakeLock, requestWakeLock, releaseWakeLock, wakeLockWanted } from './speech.js';
 
 let PRIVATE = { email: '', equipment: [] }; // filled from the encrypted vault
 const $ = (s, el = document) => el.querySelector(s);
@@ -316,17 +316,20 @@ function renderRecipe(r, params) {
 
 // ---------------------------------------------------------------- sheet helpers
 function openSheet(html) { const s = $('#sheet'); s.innerHTML = `<div class="sheet-inner">${html}</div>`; s.hidden = false; s.onclick = (e) => { if (e.target === s) closeSheet(); }; return s; }
-function closeSheet() { const s = $('#sheet'); if (!s.hidden) { s.hidden = true; s.innerHTML = ''; dictation?.stop(); } }
+function closeSheet() { const s = $('#sheet'); try { dictation?.abort(); } catch (_) {} dictation = null; if (!s.hidden) { s.hidden = true; s.innerHTML = ''; } }
 
 // ---------------------------------------------------------------- voice note
 let dictation = null;
 function openVoiceNote(r) {
   const key = 'note.' + r.id;
+  const noMicMsg = recognitionBlocked
+    ? 'In-app dictation doesn’t work in iPhone home-screen apps. Tap in the box above, then tap the 🎤 on your keyboard to dictate. Your note saves as you go.'
+    : 'In-app dictation isn’t available in this browser. Tap in the box above, then use the keyboard’s 🎤 key to dictate.';
   const s = openSheet(`
     <h3>Voice note <button class="icon-btn" id="vnClose" aria-label="Close">×</button></h3>
     <p class="note-sm">${esc(r.name)} · ${new Date().toLocaleDateString()}</p>
-    <textarea class="note" id="vnText" placeholder="${canRecognize ? 'Tap Dictate and speak…' : 'Tap here, then use the 🎤 key on your keyboard to dictate.'}">${esc(store.get(key, ''))}</textarea>
-    <div id="vnStatus" class="note-sm">${canRecognize ? '' : 'In-app dictation isn’t available in this browser' + (isIOS ? ' (iOS Safari/home-screen apps don’t support the Web Speech recognition API reliably)' : '') + '. Use the keyboard’s microphone key instead.'}</div>
+    <textarea class="note" id="vnText" placeholder="${canRecognize ? 'Tap Dictate and speak, or type…' : 'Tap here, then tap 🎤 on your keyboard to dictate…'}">${esc(store.get(key, ''))}</textarea>
+    <div id="vnStatus" class="note-sm" role="status" aria-live="polite">${canRecognize ? '' : noMicMsg}</div>
     <div class="row-btns">
       ${canRecognize ? '<button class="btn primary" id="vnMic" style="grid-column:1/-1">🎤 Dictate</button>' : ''}
       <button class="btn" id="vnCopy">📋 Copy</button>
@@ -345,15 +348,22 @@ function openVoiceNote(r) {
   ta.addEventListener('input', setMail); setMail();
   if (canRecognize) {
     let baseText = ta.value;
+    const m = $('#vnMic', s), st = $('#vnStatus', s);
     dictation = createDictation({
       onText: (t, final) => { if (final) { baseText = (baseText ? baseText.replace(/\s*$/, ' ') : '') + t; ta.value = baseText; save(); setMail(); } else ta.value = (baseText ? baseText + ' ' : '') + t; },
-      onState: (st, err) => { const m = $('#vnMic', s); if (!m) return; if (st === 'on') { m.textContent = '■ Stop'; $('#vnStatus', s).innerHTML = '<span class="mic-live">● Listening…</span>'; } else { m.textContent = '🎤 Dictate'; $('#vnStatus', s).textContent = err ? `Mic error: ${err}` : ''; } },
+      onState: (state, err) => {
+        if (!m.isConnected) return;
+        if (state === 'starting') { m.textContent = '■ Cancel'; m.dataset.state = 'starting'; st.textContent = 'Starting microphone…'; }
+        else if (state === 'on') { m.textContent = '■ Stop'; m.dataset.state = 'on'; st.innerHTML = '<span class="mic-live">● Listening…</span>'; }
+        else if (state === 'error') { if (micErrorText(err) && !['no-speech', 'aborted'].includes(err)) st.textContent = micErrorText(err); }
+        else { m.textContent = '🎤 Dictate'; m.dataset.state = 'off'; if (!err && st.textContent.startsWith('Starting')) st.textContent = ''; if (!err && st.querySelector('.mic-live')) st.textContent = ''; ta.value = baseText || ta.value; }
+      },
     });
-    $('#vnMic', s).onclick = () => { if (dictation.active) dictation.stop(); else { baseText = ta.value; dictation.start(); } };
+    ta.addEventListener('input', () => { if (!dictation?.active) baseText = ta.value; });
+    m.onclick = () => { if (dictation.active) dictation.stop(); else { baseText = ta.value; st.textContent = ''; dictation.start(); } };
   }
 }
 
-// ---------------------------------------------------------------- cook mode
 const cook = { r: null, i: 0, listener: null, sc: null };
 function openCook(r, start = 0) {
   cook.r = r; cook.sc = getScale(r); cook.i = Math.max(0, Math.min(start, r.steps.length - 1));
@@ -424,7 +434,7 @@ function readIngredients() {
   speak('Ingredients. ' + parts.join('. '));
 }
 function toggleMic() {
-  if (!canRecognize) { toast('Voice commands not supported in this browser. Use the buttons.', 3500); return; }
+  if (!canRecognize) { toast(recognitionBlocked ? 'Voice commands don’t work in iPhone home-screen apps. Use the big buttons (🔊 still reads steps).' : 'Voice commands not supported in this browser. Use the buttons.', 4000); return; }
   if (!cook.listener) cook.listener = createCommandListener({
     onCommand: (c) => {
       if (c === 'next') go(1); else if (c === 'back') go(-1);
@@ -435,14 +445,14 @@ function toggleMic() {
       status(`Heard: “${c}”`);
     },
     onHeard: (t) => { const s = $('#ckStatus'); if (s) s.title = t; },
-    onState: (st, err) => { $('#ckMic')?.classList.toggle('on', st === 'on'); if (st === 'on') status('🎙️ Listening for: next, back, repeat, ingredients, read step'); if (st === 'error' && err !== 'no-speech' && err !== 'aborted') status(`Mic: ${err}`); },
+    onState: (st, err) => { $('#ckMic')?.classList.toggle('on', st === 'on' || st === 'starting'); if (st === 'starting') status('Starting microphone… tap 🎙️ again to cancel'); else if (st === 'on') status('🎙️ Listening for: next, back, repeat, ingredients, read step'); else if (st === 'error' && err !== 'no-speech' && err !== 'aborted') status(micErrorText(err) + ' Use the big buttons.'); else if (st === 'off' && !err) status('Voice commands off.'); },
   });
   if (cook.listener.active) cook.listener.stop(); else cook.listener.start();
 }
 function closeCook(silent) {
   const el = $('#cook'); if (el.hidden) return;
   el.hidden = true; el.innerHTML = ''; document.body.style.overflow = '';
-  cook.listener?.stop(); cook.listener = null; stopSpeaking(); releaseWakeLock();
+  try { cook.listener?.abort(); } catch (_) {} cook.listener = null; stopSpeaking(); releaseWakeLock();
   document.removeEventListener('keydown', cookKeys); document.removeEventListener('visibilitychange', reWake);
 }
 
