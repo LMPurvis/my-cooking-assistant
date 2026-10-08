@@ -125,6 +125,26 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 
+// ---------------------------------------------------------------- favorites (sheet seed + per-device overrides)
+const favOverrides = store.get('favs', {});
+function isFav(r) { return Object.prototype.hasOwnProperty.call(favOverrides, r.id) ? !!favOverrides[r.id] : !!r.favorite; }
+function setFav(r, v) { if (v === !!r.favorite) delete favOverrides[r.id]; else favOverrides[r.id] = v; store.set('favs', favOverrides); }
+function favBtnHTML(r, big) {
+  const on = isFav(r);
+  return `<button class="fav-btn${big ? ' big' : ''}" data-fav="${r.id}" aria-pressed="${on}" aria-label="${on ? 'Remove from' : 'Add to'} favorites" title="${on ? 'Favorite (tap to remove)' : 'Add to favorites'}">${on ? '★' : '☆'}</button>`;
+}
+function wireFavBtn(b) {
+  b.addEventListener('click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const r = DATA.recipes.find((x) => x.id === b.dataset.fav); if (!r) return;
+    setFav(r, !isFav(r));
+    const on = isFav(r);
+    b.textContent = on ? '★' : '☆'; b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', `${on ? 'Remove from' : 'Add to'} favorites`);
+    toast(on ? '★ Added to Favorites' : 'Removed from Favorites', 1500);
+    if (state.fav && $('#cards')) renderCards();
+  });
+}
+
 // ---------------------------------------------------------------- home
 function renderHome() {
   setTab(state.fav ? 'favorites' : 'home'); setTitle('', false);
@@ -156,20 +176,20 @@ function haystack(r) {
 function renderCards() {
   const terms = state.q.toLowerCase().split(/\s+/).filter(Boolean);
   const list = DATA.recipes.filter((r) =>
-    (state.cat === 'All' || r.category === state.cat) && (!state.fav || r.favorite) &&
+    (state.cat === 'All' || r.category === state.cat) && (!state.fav || isFav(r)) &&
     (!state.tag || r.tags.some((t) => t.toLowerCase() === state.tag)) &&
     terms.every((t) => haystack(r).includes(t)));
-  list.sort((a, b) => (b.favorite - a.favorite) || a.name.localeCompare(b.name));
+  list.sort((a, b) => (isFav(b) - isFav(a)) || a.name.localeCompare(b.name));
   $('#count').textContent = `${list.length} recipe${list.length === 1 ? '' : 's'}`;
   $('#cards').innerHTML = list.length ? list.map((r) => `
-    <a class="card" href="#/r/${r.id}">
-      ${r.favorite ? '<span class="star" aria-label="Favorite">★</span>' : ''}
+    <div class="card-wrap"><a class="card" href="#/r/${r.id}">
       <div class="cat">${esc(r.category)}</div>
       <h2>${esc(r.name)}</h2>
       <div class="yield">${flagify(r.yield)}</div>
       <div class="tags">${r.tags.slice(0, 4).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}
         ${r.steps.length && r.steps.every((s) => /TBD|not recorded/i.test(s.text)) ? '<span class="badge tbd">steps TBD</span>' : ''}</div>
-    </a>`).join('') : `<div class="empty">No recipes match.${state.fav ? ' (Only 1 recipe is marked Favorite in the sheet.)' : ''}</div>`;
+    </a>${favBtnHTML(r)}</div>`).join('') : `<div class="empty">No recipes match.${state.fav ? ' Tap ☆ on any recipe to add it to Favorites.' : ''}</div>`;
+  $$('#cards .fav-btn').forEach(wireFavBtn);
 }
 
 // ---------------------------------------------------------------- recipe
@@ -258,8 +278,8 @@ function renderRecipe(r, params) {
   view.innerHTML = `
     <article>
       <div class="r-head">
-        <div class="cat">${esc(r.category)}${r.favorite ? ' · <span style="color:var(--fav)">★ Favorite</span>' : ''}</div>
-        <h2>${esc(r.name)}</h2>
+        <div class="cat">${esc(r.category)}</div>
+        <div class="r-title"><h2>${esc(r.name)}</h2>${favBtnHTML(r, true)}</div>
         ${r.description ? `<p class="desc">${esc(r.description)}</p>` : ''}
         <div class="meta-row"><span class="pill">Yield: ${flagify(r.yield)}</span>${r.origin ? `<span class="pill">${esc(r.origin)}</span>` : ''}</div>
         <div class="tags">${r.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
@@ -310,6 +330,7 @@ function renderRecipe(r, params) {
   }));
   $$('[data-sec]').forEach((i) => i.addEventListener('input', () => { const v = parseFloat(i.value); if (v > 0) { sc.secs[i.dataset.sec] = v; update(); } }));
   $('#voiceNoteBtn').addEventListener('click', () => openVoiceNote(r));
+  $$('.r-title .fav-btn').forEach(wireFavBtn);
   update();
   window.scrollTo(0, 0);
 }

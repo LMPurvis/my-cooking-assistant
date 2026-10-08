@@ -52,7 +52,13 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 14px 24px; outline: none
 .card h2 { margin: 0 34px 6px 0; font-size: 22px; line-height: 1.2; }
 .card .cat { font-size: 14px; font-weight: 700; color: var(--accent2); text-transform: uppercase; letter-spacing: .04em; }
 .card .yield { color: var(--muted); font-size: 16px; margin-top: 4px; }
-.card .star { position: absolute; top: 14px; right: 16px; font-size: 26px; color: var(--fav); }
+.card-wrap { position: relative; }
+.card-wrap .card { height: 100%; box-sizing: border-box; }
+.fav-btn { position: absolute; top: 4px; right: 4px; width: 52px; height: 52px; border: 0; background: transparent; font-size: 30px; line-height: 1; color: var(--muted); cursor: pointer; border-radius: 50%; }
+.fav-btn[aria-pressed="true"] { color: var(--fav); }
+.fav-btn.big { position: static; flex: 0 0 auto; width: 56px; height: 56px; font-size: 34px; }
+.r-title { display: flex; align-items: flex-start; gap: 6px; }
+.r-title h2 { flex: 1; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .tag { font-size: 13px; padding: 3px 10px; border-radius: 999px; background: var(--surface2); color: var(--muted); }
 .badge { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 8px; letter-spacing: .03em; vertical-align: middle; }
