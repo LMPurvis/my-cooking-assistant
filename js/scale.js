@@ -66,7 +66,8 @@ export function fmtLbOz(g) {
 export function isKitchenVolume(vol) {
   if (!vol) return false;
   return /\b(cups?|tbsp|tsp|teaspoons?|tablespoons?|ml|mL|fl\.?\s*oz|cloves?|eggs?|whites?|onion|medium|large|small|pats?|pinch)\b/i.test(vol)
-    || /\d\s*\/\s*\d\s*cup/i.test(vol);
+    || /\d\s*\/\s*\d\s*cup/i.test(vol)
+    || /(^|\s)\d[\d\/.\s-]*\s*(c|t|tb|tbs|tbl)\.?(\s|$)/i.test(vol);
 }
 
 /** True when we should show an lb/oz line under grams (meat, belly, canned oz, sausage batches, etc.). */
@@ -142,7 +143,7 @@ export function scaleText(text, factor) {
     matched = true;
     const q = parseQty(m[1]); const u = unitKey(m[2]);
     tsp += q * (u === 'tsp' ? 1 : u === 'tbsp' ? 3 : 48);
-    rest = rest.slice(m[0].length).trim();
+    rest = rest.slice(m[0].length).replace(/^\./, '').trim();
     const plus = rest.match(/^(\+|and)\s*/); if (plus) rest = rest.slice(plus[0].length); else break;
   }
   if (matched && tsp > 0) {
@@ -155,7 +156,14 @@ export function scaleText(text, factor) {
   if (gen) {
     const a = parseQty(gen[1]) * factor, b = gen[2] ? parseQty(gen[2]) * factor : null;
     const f = (x) => (x >= 10 ? fmtNum(x, 0) : fmtFrac(x));
-    return { text: f(a) + (b != null ? '–' + f(b) : '') + t.slice(gen[0].length).replace(/\([^)]*\d+(\.\d+)?\s*(g|ml|mL)\b[^)]*\)/g, ''), scaled: true };
+    const big = Math.max(a, b ?? 0) > 1.0001;
+    const tail = t.slice(gen[0].length).replace(/\([^)]*\d+(\.\d+)?\s*(g|ml|mL)\b[^)]*\)/g, '')
+      .replace(/^(\s*)(stick|loaf|loave|can|package|box|bag|egg|clove|slice|cube|onion|potato)(s|es|ves)?\b/i, (m, sp, w, suf) => {
+        const base = w.toLowerCase(); const plural = { loaf: 'loaves', loave: 'loaves', box: 'boxes', potato: 'potatoes' }[base] || base + 's';
+        const sing = base === 'loave' ? 'loaf' : base;
+        return sp + (big ? plural : sing);
+      });
+    return { text: f(a) + (b != null ? '–' + f(b) : '') + tail, scaled: true };
   }
   return { text, scaled: false };
 }
